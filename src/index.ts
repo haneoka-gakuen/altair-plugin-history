@@ -1,34 +1,26 @@
-import {
-  cloneStoryValue,
-  type JsonValue,
-} from "@haneoka/altair/model";
-import {
-  defineAltairPlugin,
-  defineAltairService,
-} from "@haneoka/altair/plugins";
+import { cloneStoryValue, type JsonValue } from "@haneoka/altair/model";
+import { defineAltairPlugin, defineAltairService } from "@haneoka/altair/plugins";
 
 export const ALTAIR_HISTORY_PLUGIN_ID = "haneoka.altair-history";
 export const ALTAIR_HISTORY_SERVICE_ID = "haneoka.altair.history";
 export const ALTAIR_HISTORY_DEFAULT_CAPACITY = 100;
 export const ALTAIR_HISTORY_MAX_CAPACITY = 1_000;
 
-export type Immutable<T> =
-  T extends (...arguments_: never[]) => unknown
-    ? never
-    : T extends readonly (infer Item)[]
-      ? readonly Immutable<Item>[]
-      : T extends object
-        ? { readonly [Key in keyof T]: Immutable<T[Key]> }
-        : T;
+export type Immutable<T> = T extends (...arguments_: never[]) => unknown
+  ? never
+  : T extends readonly (infer Item)[]
+    ? readonly Immutable<Item>[]
+    : T extends object
+      ? { readonly [Key in keyof T]: Immutable<T[Key]> }
+      : T;
 
-export type Mutable<T> =
-  T extends (...arguments_: never[]) => unknown
-    ? never
-    : T extends readonly (infer Item)[]
-      ? Mutable<Item>[]
-      : T extends object
-        ? { -readonly [Key in keyof T]: Mutable<T[Key]> }
-        : T;
+export type Mutable<T> = T extends (...arguments_: never[]) => unknown
+  ? never
+  : T extends readonly (infer Item)[]
+    ? Mutable<Item>[]
+    : T extends object
+      ? { -readonly [Key in keyof T]: Mutable<T[Key]> }
+      : T;
 
 export interface AltairHistoryUpdateOptions {
   /**
@@ -69,15 +61,10 @@ export interface AltairHistory<T> {
   readonly redoDepth: number;
   snapshot(): AltairHistorySnapshot<T>;
   update(
-    updater: (
-      draft: Mutable<T>,
-    ) => T | Mutable<T> | Immutable<T> | void,
+    updater: (draft: Mutable<T>) => T | Mutable<T> | Immutable<T> | void,
     options?: AltairHistoryUpdateOptions,
   ): Immutable<T>;
-  replace(
-    value: T | Mutable<T> | Immutable<T>,
-    options?: AltairHistoryUpdateOptions,
-  ): Immutable<T>;
+  replace(value: T | Mutable<T> | Immutable<T>, options?: AltairHistoryUpdateOptions): Immutable<T>;
   endMerge(): void;
   undo(): Immutable<T>;
   redo(): Immutable<T>;
@@ -89,11 +76,7 @@ export interface AltairHistoryService {
   readonly disposed: boolean;
   readonly size: number;
   /** `initialValue` is validated as JSON before the named history is created. */
-  create<T>(
-    name: string,
-    initialValue: T,
-    options?: AltairHistoryOptions,
-  ): AltairHistory<T>;
+  create<T>(name: string, initialValue: T, options?: AltairHistoryOptions): AltairHistory<T>;
   /**
    * Supply `T` when retrieving a named history after its creation.
    * Holding the result of `create()` avoids this lookup assertion.
@@ -105,35 +88,24 @@ export interface AltairHistoryService {
   dispose(): void;
 }
 
-export const altairHistoryServiceKey =
-  defineAltairService<AltairHistoryService>(
-    ALTAIR_HISTORY_SERVICE_ID,
-  );
+export const altairHistoryServiceKey = defineAltairService<AltairHistoryService>(ALTAIR_HISTORY_SERVICE_ID);
 
 const MAX_JSON_DEPTH = 256;
 const MAX_JSON_NODES = 1_000_000;
 
 const invalidSnapshot = (path: string, reason: string): never => {
-  throw new TypeError(
-    `Altair history snapshot is not JSON-compatible at ${path}: ${reason}`,
-  );
+  throw new TypeError(`Altair history snapshot is not JSON-compatible at ${path}: ${reason}`);
 };
 
 /**
  * Enforces the JSON-only persistence boundary at runtime for JavaScript,
  * erased TypeScript types, editor proxies and plugin callers.
  */
-export const assertAltairJsonSnapshot: (
-  value: unknown,
-) => asserts value is JsonValue = (value) => {
+export const assertAltairJsonSnapshot: (value: unknown) => asserts value is JsonValue = (value) => {
   let nodes = 0;
   const active = new WeakSet<object>();
 
-  const visit = (
-    current: unknown,
-    path: string,
-    depth: number,
-  ): void => {
+  const visit = (current: unknown, path: string, depth: number): void => {
     nodes += 1;
     if (nodes > MAX_JSON_NODES) {
       invalidSnapshot(path, "snapshot is too large");
@@ -141,11 +113,7 @@ export const assertAltairJsonSnapshot: (
     if (depth > MAX_JSON_DEPTH) {
       invalidSnapshot(path, "snapshot is too deeply nested");
     }
-    if (
-      current === null ||
-      typeof current === "string" ||
-      typeof current === "boolean"
-    ) {
+    if (current === null || typeof current === "string" || typeof current === "boolean") {
       return;
     }
     if (typeof current === "number") {
@@ -155,10 +123,7 @@ export const assertAltairJsonSnapshot: (
       return;
     }
     if (typeof current !== "object") {
-      invalidSnapshot(
-        path,
-        `${typeof current} values are not supported`,
-      );
+      invalidSnapshot(path, `${typeof current} values are not supported`);
     }
 
     const object = current as object;
@@ -179,25 +144,13 @@ export const assertAltairJsonSnapshot: (
           }
         }
         for (let index = 0; index < current.length; index += 1) {
-          const descriptor = Object.getOwnPropertyDescriptor(
-            current,
-            String(index),
-          );
+          const descriptor = Object.getOwnPropertyDescriptor(current, String(index));
           if (descriptor === undefined) {
-            invalidSnapshot(
-              `${path}[${index}]`,
-              "sparse arrays are not supported",
-            );
+            invalidSnapshot(`${path}[${index}]`, "sparse arrays are not supported");
             continue;
           }
-          if (
-            !descriptor.enumerable ||
-            !Object.hasOwn(descriptor, "value")
-          ) {
-            invalidSnapshot(
-              `${path}[${index}]`,
-              "array items must be enumerable data values",
-            );
+          if (!descriptor.enumerable || !Object.hasOwn(descriptor, "value")) {
+            invalidSnapshot(`${path}[${index}]`, "array items must be enumerable data values");
             continue;
           }
           visit(descriptor.value, `${path}[${index}]`, depth + 1);
@@ -206,10 +159,7 @@ export const assertAltairJsonSnapshot: (
       }
 
       const prototype = Object.getPrototypeOf(object);
-      if (
-        prototype !== Object.prototype &&
-        prototype !== null
-      ) {
+      if (prototype !== Object.prototype && prototype !== null) {
         invalidSnapshot(path, "only plain objects are supported");
       }
       for (const key of Reflect.ownKeys(object)) {
@@ -218,15 +168,8 @@ export const assertAltairJsonSnapshot: (
           continue;
         }
         const descriptor = Object.getOwnPropertyDescriptor(object, key);
-        if (
-          descriptor === undefined ||
-          !descriptor.enumerable ||
-          !Object.hasOwn(descriptor, "value")
-        ) {
-          invalidSnapshot(
-            `${path}.${key}`,
-            "properties must be enumerable data values",
-          );
+        if (descriptor === undefined || !descriptor.enumerable || !Object.hasOwn(descriptor, "value")) {
+          invalidSnapshot(`${path}.${key}`, "properties must be enumerable data values");
           continue;
         }
         visit(descriptor.value, `${path}.${key}`, depth + 1);
@@ -239,10 +182,7 @@ export const assertAltairJsonSnapshot: (
   visit(value, "$", 0);
 };
 
-const freezeDeep = <T>(
-  value: T,
-  seen: WeakSet<object> = new WeakSet(),
-): Immutable<T> => {
+const freezeDeep = <T>(value: T, seen: WeakSet<object> = new WeakSet()): Immutable<T> => {
   if (value === null || typeof value !== "object") {
     return value as Immutable<T>;
   }
@@ -259,60 +199,35 @@ const freezeDeep = <T>(
 
 const immutableSnapshotClone = <T>(value: unknown): Immutable<T> => {
   assertAltairJsonSnapshot(value);
-  return freezeDeep(
-    cloneStoryValue(value) as unknown as T,
-  );
+  return freezeDeep(cloneStoryValue(value) as unknown as T);
 };
 
-const mutableSnapshotClone = <T>(
-  value: Immutable<T>,
-): Mutable<T> =>
-  cloneStoryValue(value) as unknown as Mutable<T>;
+const mutableSnapshotClone = <T>(value: Immutable<T>): Mutable<T> => cloneStoryValue(value) as unknown as Mutable<T>;
 
 const sameValue = (left: unknown, right: unknown): boolean => {
   if (Object.is(left, right)) return true;
-  if (
-    left === null ||
-    right === null ||
-    typeof left !== typeof right
-  ) {
+  if (left === null || right === null || typeof left !== typeof right) {
     return false;
   }
   if (Array.isArray(left)) {
     return (
-      Array.isArray(right) &&
-      left.length === right.length &&
-      left.every((item, index) => sameValue(item, right[index]))
+      Array.isArray(right) && left.length === right.length && left.every((item, index) => sameValue(item, right[index]))
     );
   }
-  if (
-    typeof left !== "object" ||
-    typeof right !== "object" ||
-    Array.isArray(right)
-  ) {
+  if (typeof left !== "object" || typeof right !== "object" || Array.isArray(right)) {
     return false;
   }
   const leftRecord = left as Record<string, unknown>;
   const rightRecord = right as Record<string, unknown>;
   const leftKeys = Object.keys(leftRecord);
   if (leftKeys.length !== Object.keys(rightRecord).length) return false;
-  return leftKeys.every(
-    (key) =>
-      Object.hasOwn(rightRecord, key) &&
-      sameValue(leftRecord[key], rightRecord[key]),
-  );
+  return leftKeys.every((key) => Object.hasOwn(rightRecord, key) && sameValue(leftRecord[key], rightRecord[key]));
 };
 
 const requireCapacity = (capacity: number | undefined): number => {
   const value = capacity ?? ALTAIR_HISTORY_DEFAULT_CAPACITY;
-  if (
-    !Number.isSafeInteger(value) ||
-    value < 1 ||
-    value > ALTAIR_HISTORY_MAX_CAPACITY
-  ) {
-    throw new RangeError(
-      `Altair history capacity must be an integer from 1 to ${ALTAIR_HISTORY_MAX_CAPACITY}`,
-    );
+  if (!Number.isSafeInteger(value) || value < 1 || value > ALTAIR_HISTORY_MAX_CAPACITY) {
+    throw new RangeError(`Altair history capacity must be an integer from 1 to ${ALTAIR_HISTORY_MAX_CAPACITY}`);
   }
   return value;
 };
@@ -322,21 +237,13 @@ const requireName = (name: string): string => {
     throw new TypeError("Altair history name must be a string");
   }
   const value = name.trim();
-  if (
-    !value ||
-    value.length > 128 ||
-    /[\u0000-\u001f\u007f]/u.test(value)
-  ) {
-    throw new TypeError(
-      "Altair history name must contain 1 to 128 printable characters",
-    );
+  if (!value || value.length > 128 || /[\u0000-\u001f\u007f]/u.test(value)) {
+    throw new TypeError("Altair history name must contain 1 to 128 printable characters");
   }
   return value;
 };
 
-const mergeKey = (
-  options: AltairHistoryUpdateOptions | undefined,
-): string | undefined => {
+const mergeKey = (options: AltairHistoryUpdateOptions | undefined): string | undefined => {
   if (options === undefined || options.mergeKey === undefined) {
     return undefined;
   }
@@ -344,14 +251,8 @@ const mergeKey = (
     throw new TypeError("Altair history merge key must be a string");
   }
   const value = options.mergeKey.trim();
-  if (
-    !value ||
-    value.length > 256 ||
-    /[\u0000-\u001f\u007f]/u.test(value)
-  ) {
-    throw new TypeError(
-      "Altair history merge key must contain 1 to 256 printable characters",
-    );
+  if (!value || value.length > 256 || /[\u0000-\u001f\u007f]/u.test(value)) {
+    throw new TypeError("Altair history merge key must contain 1 to 256 printable characters");
   }
   return value;
 };
@@ -419,9 +320,7 @@ class BoundedJsonHistory<T> implements AltairHistory<T> {
   }
 
   update(
-    updater: (
-      draft: Mutable<T>,
-    ) => T | Mutable<T> | Immutable<T> | void,
+    updater: (draft: Mutable<T>) => T | Mutable<T> | Immutable<T> | void,
     options?: AltairHistoryUpdateOptions,
   ): Immutable<T> {
     this.#assertActive();
@@ -435,10 +334,7 @@ class BoundedJsonHistory<T> implements AltairHistory<T> {
     const next = immutableSnapshotClone<T>(returned ?? draft);
     if (sameValue(next, current)) return this.value;
 
-    const mergesWithPrevious =
-      gesture !== undefined &&
-      gesture === this.#mergeKey &&
-      this.#redo.length === 0;
+    const mergesWithPrevious = gesture !== undefined && gesture === this.#mergeKey && this.#redo.length === 0;
     if (!mergesWithPrevious) {
       this.#undo.push(current);
       if (this.#undo.length > this.capacity) {
@@ -452,10 +348,7 @@ class BoundedJsonHistory<T> implements AltairHistory<T> {
     return this.value;
   }
 
-  replace(
-    value: T | Mutable<T> | Immutable<T>,
-    options?: AltairHistoryUpdateOptions,
-  ): Immutable<T> {
+  replace(value: T | Mutable<T> | Immutable<T>, options?: AltairHistoryUpdateOptions): Immutable<T> {
     return this.update(() => value, options);
   }
 
@@ -541,30 +434,20 @@ class HistoryService implements AltairHistoryService {
     return this.#histories.size;
   }
 
-  create<T>(
-    name: string,
-    initialValue: T,
-    options: AltairHistoryOptions = {},
-  ): AltairHistory<T> {
+  create<T>(name: string, initialValue: T, options: AltairHistoryOptions = {}): AltairHistory<T> {
     this.#assertActive();
     const id = requireName(name);
     if (this.#histories.has(id)) {
       throw new Error(`Altair history already exists: ${id}`);
     }
-    const history = new BoundedJsonHistory<T>(
-      id,
-      initialValue,
-      requireCapacity(options.capacity),
-    );
+    const history = new BoundedJsonHistory<T>(id, initialValue, requireCapacity(options.capacity));
     this.#histories.set(id, history);
     return history;
   }
 
   get<T = JsonValue>(name: string): AltairHistory<T> | undefined {
     this.#assertActive();
-    return this.#histories.get(requireName(name)) as
-      | AltairHistory<T>
-      | undefined;
+    return this.#histories.get(requireName(name)) as AltairHistory<T> | undefined;
   }
 
   has(name: string): boolean {
@@ -601,8 +484,7 @@ class HistoryService implements AltairHistoryService {
   }
 }
 
-export const createAltairHistoryService =
-  (): AltairHistoryService => new HistoryService();
+export const createAltairHistoryService = (): AltairHistoryService => new HistoryService();
 
 export const altairHistoryPlugin = defineAltairPlugin({
   manifest: {
@@ -610,8 +492,7 @@ export const altairHistoryPlugin = defineAltairPlugin({
     name: "Altair History",
     version: "0.1.0",
     apiVersion: 2,
-    description:
-      "Bounded, immutable JSON snapshot undo and redo histories",
+    description: "Bounded, immutable JSON snapshot undo and redo histories",
     capabilities: ["services"],
   },
   setup(context) {
